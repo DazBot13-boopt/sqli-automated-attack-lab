@@ -33,10 +33,21 @@ SENSITIVE_COLUMN_HINTS = {"password", "passwd", "pwd", "secret", "token", "api_k
 
 
 def run_sqlmap(args, outdir):
+    """Lance sqlmap en streamant sa sortie EN DIRECT dans le terminal
+    (pour la demo : on doit VOIR sqlmap tourner, pas juste un resume),
+    tout en la capturant pour l'analyse automatique qui suit."""
     cmd = ["sqlmap"] + args + ["--batch", "-o", "--output-dir", str(outdir)]
-    print(f"\n$ {' '.join(cmd)}")
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    return proc.stdout + proc.stderr
+    print(f"\n$ {' '.join(cmd)}\n")
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1
+    )
+    captured = []
+    for line in proc.stdout:
+        print(line, end="")
+        captured.append(line)
+    proc.wait(timeout=300)
+    return "".join(captured)
 
 
 def extract_techniques(log_text):
