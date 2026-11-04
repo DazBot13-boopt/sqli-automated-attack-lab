@@ -1,0 +1,5 @@
+shop.db
+sqlmap-output/
+__pycache__/
+*.pyc
+.venv/
